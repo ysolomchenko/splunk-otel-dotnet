@@ -141,9 +141,10 @@ Supported at runtime:
   Negative YAML values are invalid and cause the configuration update to be rejected.
 - `callgraphs`: enable Callgraph snapshot profiling.
 - `callgraphs.selection_probability`: change the probability of selecting new
-  traces. If omitted, the default of `0.01` is used. Values are normalized
-  using the same rules as file-based configuration: zero, negative, or NaN values
-  use the default, and values above `1.0` are capped at `1.0`.
+  traces. If omitted, the default of `0.01` is used. The value must be a finite
+  number greater than `0` and at most `1`. An invalid value causes the entire
+  update to be rejected with a `Failed` status and an error message for this
+  field. The previously applied profiling configuration stays active.
 
 The Callgraph sampling interval retains its startup value, including when
 Callgraphs are initially disabled. Configure it before startup using

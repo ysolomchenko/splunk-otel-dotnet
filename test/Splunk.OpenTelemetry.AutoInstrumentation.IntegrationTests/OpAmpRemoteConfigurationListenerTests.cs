@@ -117,5 +117,55 @@ public class OpAmpRemoteConfigurationListenerTests
         Assert.Equal(expectedInterval, state.SnapshotsSamplingInterval);
         Assert.Equal(expectedProbability, state.SnapshotsSelectionRate);
     }
+
+    [Theory]
+    [InlineData(0.0)]
+    [InlineData(-0.1)]
+    [InlineData(2.0)]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    [InlineData(double.NegativeInfinity)]
+    public void InvalidCallgraphSelectionProbabilityRejectsWholeConfiguration(double probability)
+    {
+        _ = Assembly.LoadFrom(Path.Combine(EnvironmentHelper.GetFalloutBuildOutput(), "net", "OpenTelemetry.AutoInstrumentation.dll"));
+        ProfilerRuntimeConfiguration.Initialize(new PluginSettings(new YamlRoot()));
+        const string ValidYaml = "distribution:\n  splunk:\n    profiling:\n      callgraphs:\n        selection_probability: 0.75\n";
+        ProfilerRuntimeConfiguration.Apply(RemoteConfiguration.ParseYaml(ValidYaml), (_, _) => { });
+        var previousState = ProfilerRuntimeConfiguration.Current;
+
+        var reports = new List<RemoteConfigStatusReport>();
+        var applied = false;
+        var nativeConfigured = false;
+        var listener = new OpAmpRemoteConfigurationListener(
+            () => applied = true,
+            report =>
+            {
+                reports.Add(report);
+                return Task.CompletedTask;
+            },
+            configuration => ProfilerRuntimeConfiguration.Apply(configuration, (_, _) => nativeConfigured = true));
+        var invalidYaml = FormattableString.Invariant($"""
+            distribution:
+              splunk:
+                profiling:
+                  always_on:
+                    cpu_profiler:
+                      sampling_interval: 10000
+                  callgraphs:
+                    selection_probability: {probability:R}
+            """);
+        var configHash = new byte[] { 1, 2, 3 };
+
+        listener.HandleRemoteConfiguration(configHash, RemoteConfiguration.RemoteConfigContentType, Encoding.UTF8.GetBytes(invalidYaml));
+
+        Assert.Equal(new[] { RemoteConfigStatusCode.Applying, RemoteConfigStatusCode.Failed }, reports.Select(report => report.Status));
+        Assert.All(reports, report => Assert.Equal(configHash, report.LastRemoteConfigHash.ToArray()));
+        Assert.Equal(
+            FormattableString.Invariant($"callgraphs.selection_probability must be a finite number in the range (0, 1]. Received {probability:R}."),
+            reports[1].ErrorMessage);
+        Assert.False(nativeConfigured);
+        Assert.False(applied);
+        Assert.Same(previousState, ProfilerRuntimeConfiguration.Current);
+    }
 }
 #endif

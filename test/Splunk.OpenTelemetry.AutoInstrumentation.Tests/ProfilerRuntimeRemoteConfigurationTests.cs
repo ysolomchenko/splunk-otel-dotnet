@@ -578,14 +578,10 @@ public class ProfilerRuntimeRemoteConfigurationTests
     }
 
     [Theory]
-    [InlineData(0u, 0.0, 0.01)]
-    [InlineData(uint.MaxValue, double.NaN, 0.01)]
-    [InlineData(80u, 2.0, 1.0)]
-    [InlineData(300u, 0.75, 0.75)]
-    public void Apply_NormalizesCallgraphProbabilityAndIgnoresRemoteSamplingInterval(
-        uint interval,
-        double probability,
-        double expectedProbability)
+    [InlineData(0u, 0.01)]
+    [InlineData(uint.MaxValue, 1.0)]
+    [InlineData(300u, 0.75)]
+    public void Apply_UsesCallgraphProbabilityAndIgnoresRemoteSamplingInterval(uint interval, double probability)
     {
         ProfilerRuntimeConfiguration.Initialize(CreateSettings(new NameValueCollection
         {
@@ -601,7 +597,7 @@ public class ProfilerRuntimeRemoteConfigurationTests
         Assert.False(state.CpuProfilerEnabled);
         Assert.True(state.SnapshotsEnabled);
         Assert.Equal(80u, state.SnapshotsSamplingInterval);
-        Assert.Equal(expectedProbability, state.SnapshotsSelectionRate);
+        Assert.Equal(probability, state.SnapshotsSelectionRate);
     }
 
     [Fact]

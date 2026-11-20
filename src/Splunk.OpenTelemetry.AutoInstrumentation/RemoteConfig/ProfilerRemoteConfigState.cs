@@ -27,7 +27,7 @@ internal sealed class ProfilerRemoteConfigState
             settings.CpuProfilerCallStackInterval,
             settings.SnapshotsEnabled,
             settings.SnapshotsSamplingInterval,
-            settings.SnapshotsSelectionRate,
+            PluginSettingsHelper.GetFinalSnapshotSelectionProbability(settings.SnapshotsSelectionRate),
 #if NET
             settings.MemoryProfilerEnabled,
             PluginSettingsHelper.GetFinalMaxMemorySamples(settings))
@@ -52,7 +52,7 @@ internal sealed class ProfilerRemoteConfigState
         SnapshotsSamplingInterval = PluginSettingsHelper.GetFinalSnapshotSamplingInterval(snapshotsSamplingInterval);
         CpuProfilerCallStackInterval = PluginSettingsHelper.GetFinalContinuousSamplingInterval(
             cpuProfilerCallStackInterval, snapshotsEnabled, SnapshotsSamplingInterval);
-        SnapshotsSelectionRate = PluginSettingsHelper.GetFinalSnapshotSelectionProbability(snapshotsSelectionRate);
+        SnapshotsSelectionRate = snapshotsSelectionRate;
         SnapshotSelector = new TraceIdBasedSnapshotSelector(SnapshotsSelectionRate);
         MemoryProfilerEnabled = memoryProfilerEnabled;
         MemoryProfilerMaxMemorySamplesPerMinute = memoryProfilerMaxMemorySamplesPerMinute;
@@ -79,6 +79,13 @@ internal sealed class ProfilerRemoteConfigState
         var profiling = configuration?.Distribution?.Splunk?.Profiling;
         var cpuProfiler = profiling?.AlwaysOn?.CpuProfiler;
         var callgraphs = profiling?.Callgraphs;
+        var selectionProbability = callgraphs?.SelectionProbability ?? Constants.DefaultSnapshotSelectionRate;
+        if (selectionProbability is not (> 0 and <= 1))
+        {
+            throw new FormatException(FormattableString.Invariant(
+                $"callgraphs.selection_probability must be a finite number in the range (0, 1]. Received {selectionProbability:R}."));
+        }
+
 #if NET
         var memoryProfiler = profiling?.AlwaysOn?.MemoryProfiler;
 #endif
@@ -87,7 +94,7 @@ internal sealed class ProfilerRemoteConfigState
             cpuProfiler?.SamplingInterval ?? Constants.DefaultSamplingInterval,
             callgraphs != null,
             startupSettings.SnapshotsSamplingInterval,
-            callgraphs?.SelectionProbability ?? Constants.DefaultSnapshotSelectionRate,
+            selectionProbability,
 #if NET
             memoryProfiler != null,
             memoryProfiler != null ? PluginSettingsHelper.GetFinalMaxMemorySamples(memoryProfiler.MaxMemorySamples) : 0);
